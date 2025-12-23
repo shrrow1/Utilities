@@ -1,1 +1,5 @@
 /Music/config.yml
+/.idea/
+/.venv/
+/Music/.cache
+/Utilities.iml
