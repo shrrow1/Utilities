@@ -63,7 +63,17 @@ def get_tidal_session() -> tidalapi.Session:
 
 def main():
     tidal_session = get_tidal_session()
-    x=tidalapi.Playlist(session=tidal_session, playlist_id='3b47b891-6d62-4a92-8a96-37f498a69aa7')
-    pass
+
+    playlist_to_keep=tidal_session.playlist(playlist_id='79b47e85-1fe4-4ff3-98d8-cab3cb01896c')
+    current_ids = set([x.id for x in playlist_to_keep.items()])
+
+    playlist_from=tidal_session.playlist(playlist_id='a8d88f6b-6bcf-4262-892e-ada4c6d94fce')
+    new_ids = set([x.id for x in playlist_from.items()])
+
+    to_add = list(new_ids - current_ids)
+    print(f'Before Merge: {len(playlist_to_keep.items())}')
+    playlist_to_keep.add(to_add, allow_duplicates=False)
+    print(f'After Merge: {len(playlist_to_keep.items())}')
+
 if __name__ == "__main__":
     main()
