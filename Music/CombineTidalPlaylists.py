@@ -1,13 +1,9 @@
-import pathlib
 import yaml
-import spotipy
-from spotipy.oauth2 import SpotifyOAuth
 import tidalapi
-from typing import List, Dict, Tuple, Optional
+from typing import Dict
 from pathlib import Path
 
 TIDAL_SESSION_FILE = Path(".tidalLogin.json")
-
 
 def load_config(config_path: Path = Path("config.yml")) -> Dict:
     """
@@ -65,10 +61,10 @@ def main():
     tidal_session = get_tidal_session()
 
     playlist_to_keep=tidal_session.playlist(playlist_id='79b47e85-1fe4-4ff3-98d8-cab3cb01896c')
-    current_ids = set([x.id for x in playlist_to_keep.items()])
+    current_ids = set([str(x.id) for x in playlist_to_keep.items()])
 
     playlist_from=tidal_session.playlist(playlist_id='a8d88f6b-6bcf-4262-892e-ada4c6d94fce')
-    new_ids = set([x.id for x in playlist_from.items()])
+    new_ids = set([str(x.id) for x in playlist_from.items()])
 
     to_add = list(new_ids - current_ids)
     print(f'Before Merge: {len(playlist_to_keep.items())}')
