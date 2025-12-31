@@ -1,4 +1,3 @@
-import pathlib
 import yaml
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -6,6 +5,7 @@ import tidalapi
 from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 
+# TODO add selection window for playlists - see https://textual.textualize.io/widgets/selection_list/#__tabbed_1_2
 TIDAL_SESSION_FILE = Path(".tidalLogin.json")
 
 def load_config(config_path: Path = Path("config.yml")) -> Dict:
@@ -101,12 +101,12 @@ def fetch_playlist_data(sp: spotipy.Spotify, playlist_id: str) -> Tuple[str, Lis
 
     return playlist_name, tracks
 
-def get_or_create_tidal_playlist(session: tidalapi.Session, name: str) -> Optional[tidalapi.Playlist]:
+def get_or_create_tidal_playlist(tidal_session: tidalapi.Session, name: str) -> Optional[tidalapi.Playlist]:
     """
     Checks if a playlist exists. If so, asks to overwrite.
     Otherwise, creates a new one.
     """
-    user = session.user
+    user = tidal_session.user
     existing_playlists = user.playlists()
     target_playlist = next((p for p in existing_playlists if p.name == name), None)
 
@@ -124,7 +124,7 @@ def get_or_create_tidal_playlist(session: tidalapi.Session, name: str) -> Option
     print(f"Creating new Tidal playlist: {name}")
     return user.create_playlist(name, "Migrated from Spotify")
 
-def inject_tracks_to_tidal(session: tidalapi.Session, playlist: tidalapi.Playlist, tracks: List[Dict]):
+def inject_tracks_to_tidal(session: tidalapi.Session, playlist: tidalapi.UserPlaylist, tracks: List[Dict]):
     """
     Searches for Spotify tracks on Tidal and adds matches to the playlist.
     """
