@@ -4,6 +4,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Dict, Optional
+from TextualUi import PlaylistSelector
 
 def _load_config(config_path: Path = Path("config.yml"), logger: Optional[logging.Logger] = None) -> Dict:
     """
@@ -38,7 +39,8 @@ class TidalManager:
     def __init__(
             self,
             session_path: str = ".tidal_session.json",
-            log_file: str = "tidal_app.log"
+            log_file: str = "tidal_app.log",
+            log_level: int = logging.INFO
     ):
         self.session_path = Path(session_path)
         self.log_file = log_file
@@ -47,12 +49,12 @@ class TidalManager:
         self.session: Optional[tidalapi.Session] = None
 
         # Setup Logger
-        self.logger = self._setup_logging()
+        self.logger = self._setup_logging(log_level)
 
-    def _setup_logging(self) -> logging.Logger:
+    def _setup_logging(self, log_level) -> logging.Logger:
         """Configures a logger with both console and file handlers."""
         logger = logging.getLogger("MusicSyncManager")
-        logger.setLevel(logging.INFO)
+        logger.setLevel(log_level)
 
         if logger.hasHandlers():
             logger.handlers.clear()
