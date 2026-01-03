@@ -1,31 +1,28 @@
 import sys
 from datetime import datetime
-
 import tidalapi
-
 from MusicUtilities import TidalManager
 
-DATE_FORMAT = '%Y%-m-%d-%H:%M:%S'
-
+DATE_FORMAT = '%Y-%m-%d-%H:%M:%S'
 
 def get_tracks(playlist: tidalapi.Playlist) -> set[str]:
+    """Retrieves all track IDs from a playlist as a set."""
     pl_items = playlist.tracks()
-    # pl_items = playlist.items()
-
     return {str(x.id) for x in pl_items}
 
-
 def backup_playlist(session: tidalapi.Session, playlist: tidalapi.Playlist, folder: tidalapi.playlist.Folder) -> None:
-    new_playlist = session.user.create_playlist(title=playlist.name, description=playlist.description,
-        parent_id=folder.id)
+    """Creates a copy of a playlist inside a specific folder."""
+    new_playlist = session.user.create_playlist(
+        title=f"Backup - {playlist.name}",
+        description=playlist.description,
+        parent_id=folder.id
+    )
 
-    tracks = get_tracks(playlist)
+    tracks = list(get_tracks(playlist))
     if tracks:
-        new_playlist.add(list(tracks))
-
+        new_playlist.add(tracks)
 
 def main():
-
     tidal_mgr = TidalManager()
     log = tidal_mgr.logger
 
@@ -46,24 +43,45 @@ def main():
         source_playlist = tidal_session.playlist(source_id)
         new_ids = get_tracks(source_playlist)
 
-        backup_folder = tidal_session.user.create_folder(f'PlaylistBackup-{datetime.now().strftime(DATE_FORMAT)}')
+        source_track_count = source_playlist.get_tracks_count()
+        target_track_count = target_playlist.get_tracks_count()
+        log.info(f'Current status: Source={source_track_count} Target={target_track_count}')
 
-        for pl in source_playlist, target_playlist:
+        # Create a backup folder for safety before modification
+        folder_name = f'PlaylistBackup-{datetime.now().strftime(DATE_FORMAT)}'
+        backup_folder = tidal_session.user.create_folder(folder_name)
+        log.info(f"Created backup folder: {folder_name}")
+
+        for pl in [source_playlist, target_playlist]:
             backup_playlist(tidal_session, pl, backup_folder)
 
+        # Identify tracks in source not in target
         to_add = list(new_ids - current_ids)
+
         if not to_add:
-            log.info("Playlist is already up to date.")
+            log.info("Playlist is already up to date. No tracks to add.")
             return
 
-        log.info(f"Adding {len(to_add)} tracks.")
+        num_to_add = len(to_add)
+        log.info(f"Adding {num_to_add} unique tracks to target...")
+
+        # Perform merge
         target_playlist.add(to_add, allow_duplicates=False)
-        log.info("Merge completed successfully.")
+
+        # Verification Logic
+        new_target_track_count = target_playlist.get_tracks_count()
+        expected_count = target_track_count + num_to_add
+
+        if new_target_track_count != expected_count:
+            msg = f'Sync verification failed: Expected {expected_count} tracks, but found {new_target_track_count}'
+            log.error(msg)
+            raise ValueError(msg)
+
+        log.info(f"Merge completed successfully. New target total: {new_target_track_count}")
 
     except Exception as e:
-        log.exception(f"Fatal error: {e}")
+        log.exception(f"Fatal error during playlist sync: {e}")
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
