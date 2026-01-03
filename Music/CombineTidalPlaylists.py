@@ -2,6 +2,7 @@ import sys
 from datetime import datetime
 import tidalapi
 from MusicUtilities import TidalManager
+from TextualUi import PlaylistSelector
 
 DATE_FORMAT = '%Y-%m-%d-%H:%M:%S'
 
@@ -29,11 +30,28 @@ def main():
     try:
         tidal_session = tidal_mgr.get_session()
 
-        target_id = '031de0f8-a240-4aaa-bb43-770c852c4646'
-        source_id = '088b1b48-a6ae-48da-8c2a-fdde75f3acf9'
+        # Load all user playlists
 
-        # TODO: list playlists
-        # users_playlist = =tidal_session.user.playlists()
+        # TODO: not usre this will work if ther are more than 50 playlists
+            # user_playlists = tidal_session.user.playlists()
+            # user_playlists = tidal_session.user.favorites.playlists()
+            # Filter for only root playlists (parent_id is None)
+            # root_playlists = [p for p in user_playlists if p.parent_id is None]
+
+        # Use the selector to get source and target from the root list
+        # log.info("Select the SOURCE playlist (the one to copy FROM):")
+        # source_id = PlaylistSelector([(x.name, x.id) for x in user_playlists]).run()
+
+        # log.info("Select the TARGET playlist (the one to copy TO):")
+        # target_id = PlaylistSelector([(x.name, x.id) for x in user_playlists]).run()
+
+        source_id = '499ad7c1-0681-4d27-bd63-b5701299f039'
+        target_id = 'b7828b75-778a-42a4-96a4-9eea50cd8fef'
+
+        if not source_id or not target_id:
+
+            log.warning("Selection cancelled.")
+            return
 
         log.info(f"Syncing playlists: {source_id} -> {target_id}")
 

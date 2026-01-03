@@ -4,7 +4,6 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Dict, Optional
-from TextualUi import PlaylistSelector
 
 def _load_config(config_path: Path = Path("config.yml"), logger: Optional[logging.Logger] = None) -> Dict:
     """

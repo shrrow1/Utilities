@@ -9,6 +9,10 @@ from textual.widgets.selection_list import Selection
 class PlaylistSelector(App[None]):
     CSS_PATH = "selection_list_selected.tcss"
 
+    def __init__(self, playlists):
+        super().__init__()
+        self.playlists = playlists
+
     def compose(self) -> ComposeResult:
         with Header():
             yield Button("Start", id="start", variant="success")
@@ -16,15 +20,8 @@ class PlaylistSelector(App[None]):
         with Horizontal():
             yield SelectionList[str](
 
-                Selection("Falken's Maze", "secret_back_door", True),
-                Selection("Black Jack", "black_jack"),
-                Selection("Gin Rummy", "gin_rummy"),
-                Selection("Hearts", "hearts"),
-                Selection("Bridge", "bridge"),
-                Selection("Checkers", "checkers"),
-                Selection("Chess", "a_nice_game_of_chess", True),
-                Selection("Poker", "poker"),
-                Selection("Fighter Combat", "fighter_combat", True),
+                *[Selection(playlist_name,playlist_id) for playlist_name,playlist_id in self.playlists],
+
                 id='playlist_selectlist'
             )
             yield Pretty([])
@@ -44,4 +41,10 @@ class PlaylistSelector(App[None]):
 
 
 if __name__ == "__main__":
-    PlaylistSelector().run()
+    test_list =     [("Falken's Maze", 'a'),
+                    ("Black Jack", 'g'),
+                    ("Gin Rummy",'5'),
+                    ("Hearts", 'z'),
+                    ("Bridge", 'R')]
+
+    PlaylistSelector(test_list).run()
