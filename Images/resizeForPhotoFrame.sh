@@ -37,13 +37,15 @@ done
 
 # On Mortirolo - DO ALL THE IMAGES
 
-# Make folder structure
+# Make folder structure - GOOD
 find . -type d  ! -name '.' -print0 | xargs -0 -I {} bash -c '
   dir="{}"
-  mkdir "../PhotoFrame/${dir}"
+  mkdir ../PhotoFrame/"${dir}"
 '
 
-find . -type f -iname "*.jpg" -o -iname "*.jpeg" -print0 |  xargs -0 -I {} bash -c '
-    file="{}"
-     convert -quiet "${file}" -resize 1024x768 "../PhotoFrame/${file}"
+find . -type f \( -iname "*.jpg" -o -iname "*.jpeg" \) -print0 |  xargs -0 -I {} bash -c '
+      file="{}"
+      echo $file
+      convert -quiet "${file}" -resize 1024x768 ../PhotoFrame/"${file}"
 '
+
