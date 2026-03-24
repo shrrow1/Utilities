@@ -37,7 +37,7 @@ done
 
 # On Mortirolo - DO ALL THE IMAGES
 
-# Make folder structure - GOOD
+# Make folder structure - run in folder that contains all the photos right now
 find . -type d  ! -name '.' -print0 | xargs -0 -I {} bash -c '
   dir="{}"
   mkdir ../PhotoFrame/"${dir}"
