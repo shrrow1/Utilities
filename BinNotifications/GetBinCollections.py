@@ -12,16 +12,24 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 class WasteCollectionScraper:
     WAIT_TIMEOUT = 5
 
-    def __init__(self, headless=False):
+    def __init__(self, headless=True):
         """
-        Initializes the Selenium WebDriver with optional headless mode.
+        Initializes the Selenium WebDriver with headless mode and suppressed logging.
         """
         self.chrome_options = Options()
+
+        # 1. SUPPRESS VISIBLE WINDOW (Headless mode)
         if headless:
-            self.chrome_options.add_argument("--headless")
+            self.chrome_options.add_argument("--headless=new")
+
         self.chrome_options.add_argument("--no-sandbox")
         self.chrome_options.add_argument("--disable-dev-shm-usage")
         self.chrome_options.add_argument("--window-size=1920,1080")
+
+        # 2. SUPPRESS CONSOLE ERRORS
+        self.chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        self.chrome_options.add_argument("--log-level=3")  # Fatal errors only
+        self.chrome_options.add_argument("--silent")
 
         self.driver = webdriver.Chrome(options=self.chrome_options)
         self.wait = WebDriverWait(self.driver, 15)
@@ -42,7 +50,7 @@ class WasteCollectionScraper:
                 cookie_accept_button.click()
                 print("Cookies accepted.")
             except (TimeoutException, NoSuchElementException):
-                print("Cookie banner not found or already dismissed.")
+                pass
 
             # 2. Find and fill the postcode input
             print(f"Entering postcode: {postcode}")
@@ -78,26 +86,19 @@ class WasteCollectionScraper:
             submit_btn.click()
 
             # 6. Scrape the results using XPath
-            # We wait for the specific text that indicates the schedule has loaded
-            # self.wait.until(
-            #     EC.presence_of_element_located((By.XPATH, "//span[contains(text(), 'collection schedule for')]")))
             self.wait.until(EC.presence_of_element_located((By.ID, "lblSelectedAddr")))
 
-            print("Scraping results with XPath...")
+            print("Scraping results...")
             results = {}
 
             # Strategy: Find all strong tags that contain 'bin'
-            # Then find the relative date container
             bin_headers = self.driver.find_elements(By.XPATH,
                                                     "//strong[contains(translate(text(), 'BIN', 'bin'), 'bin')]")
 
             for header in bin_headers:
                 try:
                     bin_type = header.text.strip()
-
-                    # Based on your HTML, the date is in a div with display:table-cell
-                    # following the bin name. We look for the next div that contains a date-like string.
-                    # XPath: Go up to the container div, then find the cell with the date text
+                    # Traverse up to the margin:5px div container then find the date cell
                     parent_container = header.find_element(By.XPATH,
                                                            "./ancestor::div[contains(@style, 'margin:5px')][1]")
                     date_element = parent_container.find_element(By.XPATH,
@@ -126,7 +127,7 @@ if __name__ == "__main__":
     MY_POSTCODE = "HP4 3TH"
     MY_HOUSE = "8 Boswick Lane"
 
-    scraper = WasteCollectionScraper(headless=False)
+    scraper = WasteCollectionScraper(headless=True)
     data = scraper.find_collection_dates(TARGET_URL, MY_POSTCODE, MY_HOUSE)
 
     if data:
