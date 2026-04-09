@@ -11,7 +11,6 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # Google Calendar API Imports
 # Requires: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
-from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -102,7 +101,7 @@ class WasteCollectionScraper:
                     bin_type = header.text.strip()
                     parent = header.find_element(By.XPATH, "./ancestor::div[contains(@style, 'margin:5px')][1]")
                     date_element = parent.find_element(By.XPATH,
-                                                       ".//div[contains(text(), 'Next collection on:')]/following-sibling::div")
+                                       ".//div[contains(text(), 'Next collection on:')]/following-sibling::div")
 
                     raw_date = date_element.text.strip()
                     bin_date = raw_date.split(', ')[1] if ',' in raw_date else raw_date
