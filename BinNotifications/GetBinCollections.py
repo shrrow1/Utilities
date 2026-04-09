@@ -1,13 +1,13 @@
 import time
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
+# from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
+# from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementNotInteractableException
-
+import json
 
 class WasteCollectionScraper:
     WAIT_TIMEOUT = 5
@@ -104,9 +104,13 @@ class WasteCollectionScraper:
                     date_element = parent_container.find_element(By.XPATH,
                                                                  ".//div[contains(text(), 'Next collection on:')]/following-sibling::div")
 
-                    bin_date = date_element.text.strip()
-                    results[bin_type] = bin_date
-                    print(f"Found: {bin_type} -> {bin_date}")
+                    bin_date = date_element.text.strip()[5:]
+                    # results[bin_type] = bin_date
+                    if bin_date in results:
+                        results[bin_date] = f'{results[bin_date]}, {bin_type}'
+                    else:
+                        results[bin_date] = bin_type
+                    print(f"Found: {bin_date} -> {bin_type}")
                 except NoSuchElementException:
                     continue
 
