@@ -44,10 +44,7 @@ class WasteCollectionScraper:
         self.wait = WebDriverWait(self.driver, 15)
 
     def find_collection_dates(self, url, postcode, address_substring):
-        """
-        Specific workflow for Dacorum Borough Council waste lookup.
-        Groups bin types by date for cleaner calendar events.
-        """
+
         try:
             print(f"Navigating to {url}...")
             self.driver.get(url)
@@ -182,29 +179,29 @@ class WasteCollectionScraper:
 
                 if is_duplicate:
                     print(f"Skipping: Event already exists for {iso_date_start} ({bin_info})")
-                    continue
+                else:
+                    event = {
+                        'summary': summary,
+                        'description': f'Automated collection reminder for: {bin_info}',
+                        'start': {'date': iso_date_start},
+                        'end': {'date': iso_date_end},
+                        'reminders': {
+                            'useDefault': False,
+                            'overrides': [
+                                {'method': 'email', 'minutes': 24 * 60},
+                            ],
+                        },
+                    }
 
-                event = {
-                    'summary': summary,
-                    'description': f'Automated collection reminder for: {bin_info}',
-                    'start': {'date': iso_date_start},
-                    'end': {'date': iso_date_end},
-                    'reminders': {
-                        'useDefault': False,
-                        'overrides': [
-                            {'method': 'email', 'minutes': 24 * 60},
-                        ],
-                    },
-                }
-
-                event_result = service.events().insert(calendarId='primary', body=event).execute()
-                print(f"Created event: {iso_date_start} - {bin_info}")
+                    service.events().insert(calendarId='primary', body=event).execute()
+                    print(f"Created event: {iso_date_start} - {bin_info}")
 
             except Exception as e:
                 print(f"Failed to process event for {date_str}: {e}")
 
 
 if __name__ == "__main__":
+    # TODO: Move to config file
     TARGET_URL = "https://webapps.dacorum.gov.uk/bincollections"
     MY_POSTCODE = "HP4 3TH"
     MY_HOUSE = "8 Boswick Lane"
