@@ -4,6 +4,7 @@ import os.path
 import pickle
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
@@ -11,6 +12,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # Google Calendar API Imports
 # Requires: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -23,28 +25,47 @@ class WasteCollectionScraper:
 
     def __init__(self, headless=True):
         """
-        Initializes the Selenium WebDriver with headless mode and suppressed logging.
+        Initializes the Selenium WebDriver with settings optimized for Docker.
         """
         self.chrome_options = Options()
 
-        # 1. SUPPRESS VISIBLE WINDOW
         if headless:
             self.chrome_options.add_argument("--headless=new")
 
+        # Essential flags for running Chrome in a Docker container
         self.chrome_options.add_argument("--no-sandbox")
         self.chrome_options.add_argument("--disable-dev-shm-usage")
+        self.chrome_options.add_argument("--disable-gpu")
         self.chrome_options.add_argument("--window-size=1920,1080")
 
-        # 2. SUPPRESS CONSOLE ERRORS
+        # Point to the Chromium binary installed by apt-get in the Dockerfile
+        # Standard path for Debian/Ubuntu is /usr/bin/chromium
+        if os.path.exists("/usr/bin/chromium"):
+            self.chrome_options.binary_location = "/usr/bin/chromium"
+        elif os.path.exists("/usr/bin/chromium-browser"):
+            self.chrome_options.binary_location = "/usr/bin/chromium-browser"
+
+        # Suppress console errors
         self.chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
         self.chrome_options.add_argument("--log-level=3")
         self.chrome_options.add_argument("--silent")
 
-        self.driver = webdriver.Chrome(options=self.chrome_options)
+        # In Docker, we use the system-installed driver
+        try:
+            # Try finding the driver in common system paths
+            service = Service(executable_path="/usr/bin/chromedriver")
+            self.driver = webdriver.Chrome(service=service, options=self.chrome_options)
+        except Exception:
+            # Fallback to default (for local development)
+            self.driver = webdriver.Chrome(options=self.chrome_options)
+
         self.wait = WebDriverWait(self.driver, 15)
 
     def find_collection_dates(self, url, postcode, address_substring):
-
+        """
+        Specific workflow for Dacorum Borough Council waste lookup.
+        Groups bin types by date for cleaner calendar events.
+        """
         try:
             print(f"Navigating to {url}...")
             self.driver.get(url)
@@ -98,7 +119,7 @@ class WasteCollectionScraper:
                     bin_type = header.text.strip()
                     parent = header.find_element(By.XPATH, "./ancestor::div[contains(@style, 'margin:5px')][1]")
                     date_element = parent.find_element(By.XPATH,
-                                       ".//div[contains(text(), 'Next collection on:')]/following-sibling::div")
+                                                       ".//div[contains(text(), 'Next collection on:')]/following-sibling::div")
 
                     raw_date = date_element.text.strip()
                     bin_date = raw_date.split(', ')[1] if ',' in raw_date else raw_date
@@ -179,29 +200,29 @@ class WasteCollectionScraper:
 
                 if is_duplicate:
                     print(f"Skipping: Event already exists for {iso_date_start} ({bin_info})")
-                else:
-                    event = {
-                        'summary': summary,
-                        'description': f'Automated collection reminder for: {bin_info}',
-                        'start': {'date': iso_date_start},
-                        'end': {'date': iso_date_end},
-                        'reminders': {
-                            'useDefault': False,
-                            'overrides': [
-                                {'method': 'email', 'minutes': 24 * 60},
-                            ],
-                        },
-                    }
+                    continue
 
-                    service.events().insert(calendarId='primary', body=event).execute()
-                    print(f"Created event: {iso_date_start} - {bin_info}")
+                event = {
+                    'summary': summary,
+                    'description': f'Automated collection reminder for: {bin_info}',
+                    'start': {'date': iso_date_start},
+                    'end': {'date': iso_date_end},
+                    'reminders': {
+                        'useDefault': False,
+                        'overrides': [
+                            {'method': 'email', 'minutes': 24 * 60},
+                        ],
+                    },
+                }
+
+                event_result = service.events().insert(calendarId='primary', body=event).execute()
+                print(f"Created event: {iso_date_start} - {bin_info}")
 
             except Exception as e:
                 print(f"Failed to process event for {date_str}: {e}")
 
 
 if __name__ == "__main__":
-    # TODO: Move to config file
     TARGET_URL = "https://webapps.dacorum.gov.uk/bincollections"
     MY_POSTCODE = "HP4 3TH"
     MY_HOUSE = "8 Boswick Lane"
