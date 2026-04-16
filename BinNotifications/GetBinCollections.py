@@ -22,6 +22,7 @@ from pathlib import Path
 class WasteCollectionScraper:
     WAIT_TIMEOUT = 5
     SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+    CREDENTIALS_DIR = "/usr/src/app/Credentials"
 
     def __init__(self, headless=True):
         self.chrome_options = Options()
@@ -109,10 +110,8 @@ class WasteCollectionScraper:
 
     def sync_to_google_calendar(self, data):
 
-        CREDENTIALS_DIR= os.environ["CONTAINER_CREDENTIALS_DIRECTORY"]
-
-        pickle_file =Path(f'{CREDENTIALS_DIR}/token.pickle')
-        credentials_file =Path(f'{CREDENTIALS_DIR}/credentials.json')
+        pickle_file =Path(f'{self.CREDENTIALS_DIR}/token.pickle')
+        credentials_file =Path(f'{self.CREDENTIALS_DIR}/credentials.json')
 
         if not data:
             return
