@@ -11,66 +11,50 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # Google Calendar API Imports
-# Requires: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-
+import time
+import os
+from pathlib import Path
 
 class WasteCollectionScraper:
     WAIT_TIMEOUT = 5
-    # Permission scope for managing calendar events
     SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 
     def __init__(self, headless=True):
-        """
-        Initializes the Selenium WebDriver with settings optimized for Docker.
-        """
         self.chrome_options = Options()
-
         if headless:
             self.chrome_options.add_argument("--headless=new")
 
-        # Essential flags for running Chrome in a Docker container
         self.chrome_options.add_argument("--no-sandbox")
         self.chrome_options.add_argument("--disable-dev-shm-usage")
         self.chrome_options.add_argument("--disable-gpu")
         self.chrome_options.add_argument("--window-size=1920,1080")
 
-        # Point to the Chromium binary installed by apt-get in the Dockerfile
-        # Standard path for Debian/Ubuntu is /usr/bin/chromium
+        # Check for system Chromium (Docker paths)
         if os.path.exists("/usr/bin/chromium"):
             self.chrome_options.binary_location = "/usr/bin/chromium"
         elif os.path.exists("/usr/bin/chromium-browser"):
             self.chrome_options.binary_location = "/usr/bin/chromium-browser"
 
-        # Suppress console errors
         self.chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
         self.chrome_options.add_argument("--log-level=3")
         self.chrome_options.add_argument("--silent")
 
-        # In Docker, we use the system-installed driver
         try:
-            # Try finding the driver in common system paths
             service = Service(executable_path="/usr/bin/chromedriver")
             self.driver = webdriver.Chrome(service=service, options=self.chrome_options)
         except Exception:
-            # Fallback to default (for local development)
             self.driver = webdriver.Chrome(options=self.chrome_options)
 
         self.wait = WebDriverWait(self.driver, 15)
 
     def find_collection_dates(self, url, postcode, address_substring):
-        """
-        Specific workflow for Dacorum Borough Council waste lookup.
-        Groups bin types by date for cleaner calendar events.
-        """
         try:
             print(f"Navigating to {url}...")
             self.driver.get(url)
-
-            # Handle Cookie Consent
             try:
                 cookie_accept_button = WebDriverWait(self.driver, self.WAIT_TIMEOUT).until(
                     EC.element_to_be_clickable((By.ID, 'newConsentGranted'))
@@ -79,13 +63,11 @@ class WasteCollectionScraper:
             except (TimeoutException, NoSuchElementException):
                 pass
 
-            # Enter Postcode
             postcode_input = self.wait.until(EC.visibility_of_element_located((By.ID, "txtBxPCode")))
             postcode_input.clear()
             postcode_input.send_keys(postcode)
             self.driver.find_element(By.ID, "btnFindAddr").click()
 
-            # Select Address
             address_dropdown_element = self.wait.until(EC.visibility_of_element_located((By.ID, "lstBxAddrList")))
             dropdown = Select(address_dropdown_element)
 
@@ -98,29 +80,20 @@ class WasteCollectionScraper:
                     break
 
             if not found:
-                print(f"Could not find address containing '{address_substring}'")
                 return None
 
-            # Click Show Collections
             time.sleep(1)
             self.driver.find_element(By.ID, "MainContent_btnGetSchedules").click()
-
-            # Wait for results
             self.wait.until(EC.presence_of_element_located((By.ID, "lblSelectedAddr")))
 
-            print("Scraping and grouping results...")
             results = {}
-
-            bin_headers = self.driver.find_elements(By.XPATH,
-                                                    "//strong[contains(translate(text(), 'BIN', 'bin'), 'bin')]")
+            bin_headers = self.driver.find_elements(By.XPATH, "//strong[contains(translate(text(), 'BIN', 'bin'), 'bin')]")
 
             for header in bin_headers:
                 try:
                     bin_type = header.text.strip()
                     parent = header.find_element(By.XPATH, "./ancestor::div[contains(@style, 'margin:5px')][1]")
-                    date_element = parent.find_element(By.XPATH,
-                                                       ".//div[contains(text(), 'Next collection on:')]/following-sibling::div")
-
+                    date_element = parent.find_element(By.XPATH, ".//div[contains(text(), 'Next collection on:')]/following-sibling::div")
                     raw_date = date_element.text.strip()
                     bin_date = raw_date.split(', ')[1] if ',' in raw_date else raw_date
 
@@ -128,113 +101,102 @@ class WasteCollectionScraper:
                         results[bin_date] = f"{results[bin_date]} & {bin_type}"
                     else:
                         results[bin_date] = bin_type
-
-                    print(f"Found: {bin_date} -> {results[bin_date]}")
                 except (NoSuchElementException, IndexError):
                     continue
-
             return results
-
-        except Exception as e:
-            print(f"An error occurred during scraping: {e}")
-            return None
         finally:
-            print("Closing browser...")
             self.driver.quit()
 
     def sync_to_google_calendar(self, data):
-        """
-        Authenticates and adds the scraped dates as all-day events.
-        Optimized to only check for existing events on the specific collection days.
-        """
+
+        CREDENTIALS_DIR= os.environ["CONTAINER_CREDENTIALS_DIRECTORY"]
+
+        pickle_file =Path(f'{CREDENTIALS_DIR}/token.pickle')
+        credentials_file =Path(f'{CREDENTIALS_DIR}/credentials.json')
+
         if not data:
-            print("No data to sync.")
             return
 
         creds = None
-        if os.path.exists('token.pickle'):
-            with open('token.pickle', 'rb') as token:
+        # Load the existing token if it exists
+        if os.path.exists(pickle_file) and os.path.getsize(pickle_file) > 0:
+            with open(pickle_file, 'rb') as token:
                 creds = pickle.load(token)
 
+        # If no valid credentials available, let the user log in.
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
+                print("Refreshing expired credentials...")
                 creds.refresh(Request())
             else:
-                if not os.path.exists('credentials.json'):
+                if not os.path.exists(credentials_file):
                     print("Error: 'credentials.json' not found.")
                     return
-                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', self.SCOPES)
-                creds = flow.run_local_server(port=0)
 
-            with open('token.pickle', 'wb') as token:
+                flow = InstalledAppFlow.from_client_secrets_file(credentials_file, self.SCOPES)
+
+                try:
+                    # Attempt local server first (works on desktop)
+                    creds = flow.run_local_server(port=0)
+                except Exception:
+                    # Fallback for Docker/Headless
+                    print("\n*** ACTION REQUIRED ***")
+                    print("Could not open browser. Please use the following link to authorize the app:")
+                    auth_url, _ = flow.authorization_url(prompt='consent', access_type='offline')
+                    print(f"\n{auth_url}\n")
+                    code = input("Enter the authorization code: ").strip()
+                    flow.fetch_token(code=code)
+                    creds = flow.credentials
+
+            # Save the credentials for the next run (including the refresh token)
+            with open(pickle_file, 'wb') as token:
                 pickle.dump(creds, token)
+                print("Token saved/refreshed to token.pickle")
 
         service = build('calendar', 'v3', credentials=creds)
 
-        print("\nSyncing to Google Calendar...")
         for date_str, bin_info in data.items():
             try:
                 date_obj = datetime.datetime.strptime(date_str, "%d %b %Y")
-                iso_date_start = date_obj.strftime("%Y-%m-%d")
-
-                # For all-day events, 'end' date is exclusive (day after start)
-                iso_date_end = (date_obj + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-
+                iso_start = date_obj.strftime("%Y-%m-%d")
+                iso_end = (date_obj + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
                 summary = f'Bins: {bin_info}'
-
-                # Optimized Check: Only fetch events for this specific day
-                time_min = f"{iso_date_start}T00:00:00Z"
-                time_max = f"{iso_date_start}T23:59:59Z"
 
                 events_result = service.events().list(
                     calendarId='primary',
-                    timeMin=time_min,
-                    timeMax=time_max,
+                    timeMin=f"{iso_start}T00:00:00Z",
+                    timeMax=f"{iso_start}T23:59:59Z",
                     singleEvents=True
                 ).execute()
 
-                existing_events = events_result.get('items', [])
-
-                # Check if an event with this exact summary already exists on this day
-                is_duplicate = any(event.get('summary') == summary for event in existing_events)
-
-                if is_duplicate:
-                    print(f"Skipping: Event already exists for {iso_date_start} ({bin_info})")
+                if any(event.get('summary') == summary for event in events_result.get('items', [])):
+                    print(f"Skipping duplicate: {iso_start}")
                     continue
 
                 event = {
                     'summary': summary,
-                    'description': f'Automated collection reminder for: {bin_info}',
-                    'start': {'date': iso_date_start},
-                    'end': {'date': iso_date_end},
-                    'reminders': {
-                        'useDefault': False,
-                        'overrides': [
-                            {'method': 'email', 'minutes': 24 * 60},
-                        ],
-                    },
+                    'description': f'Automated reminder: {bin_info}',
+                    'start': {'date': iso_start},
+                    'end': {'date': iso_end},
+                    'reminders': {'useDefault': False, 'overrides': [{'method': 'email', 'minutes': 24 * 60}]}
                 }
-
-                event_result = service.events().insert(calendarId='primary', body=event).execute()
-                print(f"Created event: {iso_date_start} - {bin_info}")
-
+                service.events().insert(calendarId='primary', body=event).execute()
+                print(f"Synced: {iso_start}")
             except Exception as e:
-                print(f"Failed to process event for {date_str}: {e}")
+                print(f"Error syncing {date_str}: {e}")
 
+def get_config():
+    config={}
+    config["url"] = os.environ["COLLECTIONS_URL"]
+    config["postcode"] = os.environ["POSTCODE"]
+    config["address"] = os.environ["ADDRESS_SEARCH"]
+    return config
 
 if __name__ == "__main__":
-    TARGET_URL = "https://webapps.dacorum.gov.uk/bincollections"
-    MY_POSTCODE = "HP4 3TH"
-    MY_HOUSE = "8 Boswick Lane"
-
+    CONFIG = get_config()
+    # CONFIG = {"url": "https://webapps.dacorum.gov.uk/bincollections", "pc": "HP4 3TH", "addr": "8 Boswick Lane"}
+    # time.sleep(60)
     scraper = WasteCollectionScraper(headless=True)
-    scraped_data = scraper.find_collection_dates(TARGET_URL, MY_POSTCODE, MY_HOUSE)
-
-    if scraped_data:
-        print("\n--- Summary of Collections Found ---")
-        for d, b in scraped_data.items():
-            print(f"{d}: {b}")
-
-        scraper.sync_to_google_calendar(scraped_data)
-    else:
-        print("Scraping failed or no data returned.")
+    data = scraper.find_collection_dates(CONFIG["url"], CONFIG["postcode"], CONFIG["address"])
+    if data:
+        scraper.sync_to_google_calendar(data)

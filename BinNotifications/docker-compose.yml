@@ -1,0 +1,12 @@
+services:
+  bincollections:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ${CREDENTIALS_DIRECTORY}
+        target: /usr/src/app/Credentials
+    environment:
+      POSTCODE: "HP4 3TH"
+      ADDRESS_SEARCH: "8 Boswick Lane"
+      COLLECTIONS_URL: "https://webapps.dacorum.gov.uk/bincollections"

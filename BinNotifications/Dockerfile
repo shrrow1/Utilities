@@ -8,7 +8,9 @@ RUN apt-get update && apt-get install -y \
     chromium-driver \
     && rm -rf /var/lib/apt/lists/*
 
+#COPY GetBinCollections.py requirements.txt token.pickle credentials.json ./
 COPY GetBinCollections.py requirements.txt ./
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Set environment variable so Selenium knows where Chrome is if needed
