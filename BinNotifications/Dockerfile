@@ -1,15 +1,19 @@
 FROM python:3.12
 
-WORKDIR /usr/src/app
+ARG TARGET_DIR="/usr/src/app"
+ARG CRON_LOG="/var/log/BinCollections.log"
+WORKDIR ${TARGET_DIR}
+
 
 # Install Chromium and ChromeDriver
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
+    cron \
     && rm -rf /var/lib/apt/lists/*
 
 #COPY GetBinCollections.py requirements.txt token.pickle credentials.json ./
-COPY GetBinCollections.py requirements.txt ./
+COPY GetBinCollections.py requirements.txt bincollections.env .env ./
 
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -17,9 +21,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
-CMD [ "python", "./GetBinCollections.py" ]
+RUN touch ${CRON_LOG}
 
-### Why this works:
-#1.  **Architecture Match**: By using `apt-get install chromium`, Debian (the base of the Python image) fetches the binary built specifically for your architecture (`aarch64` for ARM/Mac or `x86_64` for Intel).
-#2.  **Binary Location**: The updated Python code explicitly checks for `/usr/bin/chromium`, ensuring it doesn't try to download a generic version that might not run on your CPU.
-#3.  **No Sandbox**: Running as root in Docker requires the `--no-sandbox` flag, which I've added to the script.
+# Setup cron jobcrontab -l
+RUN (crontab -l ; echo "*/1 * * * * /usr/local/bin/python ${TARGET_DIR}/GetBinCollections.py >> ${CRON_LOG} 2>&1") | crontab
+
+# Run the command on container startup
+ENTRYPOINT ["/bin/sh", "-c", "cron start && tail -f ${CRON_LOG}"]
