@@ -28,4 +28,4 @@ RUN (crontab -l ; echo "0 4 * * 2 . /etc/environment; /usr/local/bin/python ${TA
 
 
 # Run the command on container startup
-ENTRYPOINT ["/bin/sh", "-c", "printenv > /etc/environment && cron && tail -f ${CRON_LOG}"]
+ENTRYPOINT ["/bin/sh", "-c", "printenv >> /etc/environment && cron && tail -f ${CRON_LOG}"]
