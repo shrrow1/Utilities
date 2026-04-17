@@ -2,7 +2,7 @@ services:
   bincollections:
     env_file: "./bincollections.env"
     build: .
-#    restart: unless-stopped
+    restart: unless-stopped
     volumes:
       - type: bind
         source: ${HOST_CREDENTIALS_DIRECTORY}
