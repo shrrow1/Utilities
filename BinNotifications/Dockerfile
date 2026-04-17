@@ -24,7 +24,8 @@ ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 RUN touch ${CRON_LOG}
 
 # Setup cron jobcrontab -l
-RUN (crontab -l ; echo "*/1 * * * * /usr/local/bin/python ${TARGET_DIR}/GetBinCollections.py >> ${CRON_LOG} 2>&1") | crontab
+RUN (crontab -l ; echo "0 4 * * 2 . /etc/environment; /usr/local/bin/python ${TARGET_DIR}/GetBinCollections.py >> ${CRON_LOG} 2>&1") | crontab
+
 
 # Run the command on container startup
-ENTRYPOINT ["/bin/sh", "-c", "cron start && tail -f ${CRON_LOG}"]
+ENTRYPOINT ["/bin/sh", "-c", "printenv > /etc/environment && cron && tail -f ${CRON_LOG}"]
