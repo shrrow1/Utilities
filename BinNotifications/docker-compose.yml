@@ -1,5 +1,6 @@
 services:
   bincollections:
+    container_name: bincollections
     env_file: "./bincollections.env"
     build: .
     restart: unless-stopped
