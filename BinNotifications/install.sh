@@ -1,10 +1,14 @@
 #!/bin/ksh
-HOST=stu@192.168.1.5
+TARGET_USER_HOST=stu@nuc.home
 
-ssh ${HOST} << !EOF
+ssh ${TARGET_USER_HOST} << !EOF
 mkdir -p /AppData/BinNotifications/Credentials
 !EOF
 
-scp docker-compose.yml Dockerfile GetBinNotifications.py .env bincollections.env \
-        ${HOST}:/AppData/BinNotifications/
-scp Credentials/* ${HOST}:/AppData/BinNotifications/Credentials
+scp docker-compose.yml Dockerfile \
+    GetBinCollections.py .env bincollections.env \
+    requirements.txt \
+        ${TARGET_USER_HOST}:/AppData/BinNotifications/
+scp Credentials/* ${TARGET_USER_HOST}:/AppData/BinNotifications/Credentials
+
+
