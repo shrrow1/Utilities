@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Countdown</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="countdownCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('countdownCanvas');
+        const ctx = canvas.getContext('2d');
+        const daysRemaining = {{ days }};
+        console.log("DEBUG: Received days from server:", daysRemaining);
+
+        function resize() {
+            console.log("DEBUG: Resizing canvas to", window.innerWidth, "x", window.innerHeight);
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            draw();
+        }
+
+        function draw() {
+            console.log("DEBUG: Drawing canvas...");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Background gradient
+            const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width/2);
+            grad.addColorStop(0, '#2c3e50');
+            grad.addColorStop(1, '#000000');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Text styling
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Draw Number
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = `bold ${Math.min(canvas.width, canvas.height) * 0.3}px sans-serif`;
+            ctx.fillText(daysRemaining, canvas.width / 2, canvas.height / 2 - 20);
+
+            // Draw Message
+            ctx.fillStyle = '#ecf0f1';
+            ctx.font = `${Math.min(canvas.width, canvas.height) * 0.05}px sans-serif`;
+            ctx.fillText('days to go and counting .....', canvas.width / 2, canvas.height / 2 + (canvas.height * 0.15));
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+    </script>
+</body>
+</html>
