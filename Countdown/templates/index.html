@@ -95,11 +95,29 @@
             ctx.fillText('days to go and counting .....', canvas.width / 2, canvas.height / 2 + (canvas.height * 0.15));
 
             // Animate Stick Figure
-            xPos += 3;
+            // Base speed: cross screen in 10s (600 frames at 60fps)
+            const slowBaseSpeed = canvas.width / 600;
+
+            // Exponential Urgency:
+            // 200 days out: almost 0 extra speed
+            // 30 days out: starts to run
+            // 5 days out: sprinting
+            // 0 days: ~10x base speed
+            const daysToTarget = Math.max(0, daysRemaining);
+            const urgencyFactor = Math.pow(Math.max(0, (200 - daysToTarget) / 200), 3);
+            const urgencySpeed = urgencyFactor * (canvas.width / 60); // Max speed = cross screen in 1s
+
+            const currentSpeed = slowBaseSpeed + urgencySpeed;
+            xPos += currentSpeed;
+
             if (xPos > canvas.width + 50) xPos = -50;
-            frame++;
-            
+
+            // Leg movement frequency (frame increment)
+            // Scales with speed so legs don't slide
+            frame += currentSpeed * 0.2;
+
             drawStickFigure(xPos, canvas.height / 2 + (canvas.height * 0.35), frame);
+
 
             requestAnimationFrame(animate);
         }
