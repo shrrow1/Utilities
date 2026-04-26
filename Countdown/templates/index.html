@@ -30,17 +30,47 @@
         const canvas = document.getElementById('countdownCanvas');
         const ctx = canvas.getContext('2d');
         const daysRemaining = {{ days }};
+        let xPos = -50;
+        let frame = 0;
+
         console.log("DEBUG: Received days from server:", daysRemaining);
 
         function resize() {
-            console.log("DEBUG: Resizing canvas to", window.innerWidth, "x", window.innerHeight);
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            draw();
         }
 
-        function draw() {
-            console.log("DEBUG: Drawing canvas...");
+        function drawStickFigure(x, y, frame) {
+            const scale = Math.min(canvas.width, canvas.height) * 0.05;
+            const walkCycle = Math.sin(frame * 0.2);
+            
+            ctx.strokeStyle = '#ecf0f1';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+
+            // Head
+            ctx.arc(x, y - scale * 2, scale * 0.4, 0, Math.PI * 2);
+            
+            // Body
+            ctx.moveTo(x, y - scale * 1.6);
+            ctx.lineTo(x, y - scale * 0.6);
+
+            // Arms
+            ctx.moveTo(x, y - scale * 1.4);
+            ctx.lineTo(x + walkCycle * scale * 0.5, y - scale * 0.8);
+            ctx.moveTo(x, y - scale * 1.4);
+            ctx.lineTo(x - walkCycle * scale * 0.5, y - scale * 0.8);
+
+            // Legs
+            ctx.moveTo(x, y - scale * 0.6);
+            ctx.lineTo(x + walkCycle * scale * 0.6, y);
+            ctx.moveTo(x, y - scale * 0.6);
+            ctx.lineTo(x - walkCycle * scale * 0.6, y);
+
+            ctx.stroke();
+        }
+
+        function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             // Background gradient
@@ -63,10 +93,20 @@
             ctx.fillStyle = '#ecf0f1';
             ctx.font = `${Math.min(canvas.width, canvas.height) * 0.05}px sans-serif`;
             ctx.fillText('days to go and counting .....', canvas.width / 2, canvas.height / 2 + (canvas.height * 0.15));
+
+            // Animate Stick Figure
+            xPos += 3;
+            if (xPos > canvas.width + 50) xPos = -50;
+            frame++;
+            
+            drawStickFigure(xPos, canvas.height / 2 + (canvas.height * 0.35), frame);
+
+            requestAnimationFrame(animate);
         }
 
         window.addEventListener('resize', resize);
         resize();
+        animate();
     </script>
 </body>
 </html>
