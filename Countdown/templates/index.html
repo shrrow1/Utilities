@@ -30,10 +30,14 @@
         const canvas = document.getElementById('countdownCanvas');
         const ctx = canvas.getContext('2d');
         const daysRemaining = {{ days }};
+        const workDaysRemaining = {{ work_days }};
+        const holidayCalc = {{ holiday_calc }};
+        
         let xPos = -50;
         let frame = 0;
+        let lapCount = 0;
         
-        // Tracking current vs next colors for continuous painting
+        // Tracking current vs next colors
         let currentNumCol = '#333';
         let currentMsgCol = '#333';
         let nextNumCol = getRandomColor();
@@ -42,8 +46,6 @@
         function getRandomColor() {
             return `hsl(${Math.random() * 360}, 80%, 65%)`;
         }
-
-        console.log("DEBUG: Received days from server:", daysRemaining);
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -80,19 +82,32 @@
             ctx.stroke();
         }
 
-        function drawText(numCol, txtCol) {
+        function drawText(numCol, txtCol, screenIndex) {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
+            
+            let displayDays, displayMsg;
+            
+            if (screenIndex === 0) {
+                displayDays = daysRemaining;
+                displayMsg = 'days to go and counting .....';
+            } else if (screenIndex === 1) {
+                displayDays = workDaysRemaining;
+                displayMsg = 'working days left .....';
+            } else {
+                displayDays = holidayCalc;
+                displayMsg = '... excluding holidays';
+            }
             
             // Draw Number
             ctx.fillStyle = numCol;
             ctx.font = `bold ${Math.min(canvas.width, canvas.height) * 0.3}px sans-serif`;
-            ctx.fillText(daysRemaining, canvas.width / 2, canvas.height / 2 - 20);
+            ctx.fillText(displayDays, canvas.width / 2, canvas.height / 2 - 20);
 
             // Draw Message
             ctx.fillStyle = txtCol;
             ctx.font = `${Math.min(canvas.width, canvas.height) * 0.05}px sans-serif`;
-            ctx.fillText('days to go and counting .....', canvas.width / 2, canvas.height / 2 + (canvas.height * 0.15));
+            ctx.fillText(displayMsg, canvas.width / 2, canvas.height / 2 + (canvas.height * 0.15));
         }
 
         function animate() {
@@ -105,21 +120,29 @@
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw "Current" Layer (already painted)
-            drawText(currentNumCol, currentMsgCol);
+            const screenIndex = lapCount % 3;
 
-            // 2. Draw "Next" Layer (being painted by runner)
+            // 1. Draw "Current" Layer
+            drawText(currentNumCol, currentMsgCol, screenIndex);
+
+            // 2. Draw "Next" Layer (Clipped)
             ctx.save();
             ctx.beginPath();
             ctx.rect(0, 0, xPos, canvas.height);
             ctx.clip();
-            drawText(nextNumCol, nextMsgCol);
+            drawText(nextNumCol, nextMsgCol, screenIndex);
             ctx.restore();
 
             // Animate Stick Figure
             const slowBaseSpeed = canvas.width / 600;
-            const daysToTarget = Math.max(0, daysRemaining);
-            const urgencyFactor = Math.pow(Math.max(0, (200 - daysToTarget) / 200), 3);
+            
+            // Pick days to use for urgency
+            let daysForUrgency = daysRemaining;
+            if (screenIndex === 1) daysForUrgency = workDaysRemaining;
+            if (screenIndex === 2) daysForUrgency = holidayCalc;
+
+            const urgencyLimit = 200;
+            const urgencyFactor = Math.pow(Math.max(0, (urgencyLimit - daysForUrgency) / urgencyLimit), 3);
             const urgencySpeed = urgencyFactor * (canvas.width / 60);
 
             const currentSpeed = slowBaseSpeed + urgencySpeed;
@@ -127,7 +150,7 @@
 
             if (xPos > canvas.width + 50) {
                 xPos = -50;
-                // Move "next" colors to "current", and pick new "next" colors
+                lapCount++;
                 currentNumCol = nextNumCol;
                 currentMsgCol = nextMsgCol;
                 nextNumCol = getRandomColor();
