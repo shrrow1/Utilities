@@ -3,6 +3,10 @@ Compose doesn't force a rebuild by default so we need to tell it to
 ```shell
 sudo docker compose down && sudo docker compose up --build -d
 ```
+
+# Logging
+Logs to `/var/log/BinCollections.log`
+
 # Google Cloud Console Setup for Calendar API
 
 Follow these steps to generate the `credentials.json` file required for `waste_scraper.py`.
