@@ -44,7 +44,7 @@ def index():
     
     # Check for 'holidays' override in URL params (default: 44)
     try:
-        holiday_count = int(request.args.get('holidays', 44))
+        holiday_count = int(request.args.get('holidays', 33))
     except (ValueError, TypeError):
         holiday_count = 44
     
