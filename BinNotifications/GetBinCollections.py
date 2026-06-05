@@ -1,28 +1,34 @@
-import time
 import datetime
+import logging
 import os.path
 import pickle
+import time
+from pathlib import Path
+
+from google.auth.transport.requests import Request
+# Google Calendar API Imports
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.webdriver.support.ui import WebDriverWait, Select
 
-# Google Calendar API Imports
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
-import time
-import os
-from pathlib import Path
+from shared_logger import CustomLogger
+
+logger = CustomLogger.CustomLogger(
+    name=__name__,
+    # log_file="logs/BinCollections.log",
+    level=logging.DEBUG
+)
 
 class WasteCollectionScraper:
     WAIT_TIMEOUT = 5
     SCOPES = ['https://www.googleapis.com/auth/calendar.events']
-    CREDENTIALS_DIR = "/usr/src/app/Credentials"
+    CREDENTIALS_DIR = os.getenv("CREDENTIALS_DIR", "/usr/src/app/Credentials")
 
     def __init__(self, headless=True):
         self.chrome_options = Options()
@@ -54,7 +60,7 @@ class WasteCollectionScraper:
 
     def find_collection_dates(self, url, postcode, address_substring):
         try:
-            print(f"Navigating to {url}...")
+            logger.info(f"Navigating to {url}...")
             self.driver.get(url)
             try:
                 cookie_accept_button = WebDriverWait(self.driver, self.WAIT_TIMEOUT).until(
@@ -76,11 +82,12 @@ class WasteCollectionScraper:
             for option in dropdown.options:
                 if address_substring.lower() in option.text.lower():
                     dropdown.select_by_visible_text(option.text)
-                    print(f"Selected address: {option.text}")
+                    logger.info(f"Selected address: {option.text}")
                     found = True
                     break
 
             if not found:
+                logger.error("Address not found in dropdown.")
                 return None
 
             time.sleep(1)
@@ -117,40 +124,65 @@ class WasteCollectionScraper:
             return
 
         creds = None
-        # Load the existing token if it exists
+        # Load existing credentials if token.pickle exists and is non-empty
         if os.path.exists(pickle_file) and os.path.getsize(pickle_file) > 0:
             with open(pickle_file, 'rb') as token:
                 creds = pickle.load(token)
 
-        # If no valid credentials available, let the user log in.
+        # Handle headless OAuth setup safely without locking Docker logs
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                print("Refreshing expired credentials...")
-                creds.refresh(Request())
-            else:
+                logger.info("Refreshing expired credentials...")
+                try:
+                    creds.refresh(Request())
+                except Exception as e:
+                    logger.info(f"Failed to refresh token: {e}. Re-authorization required.")
+                    creds = None
+
+            if not creds:
                 if not os.path.exists(credentials_file):
-                    print("Error: 'credentials.json' not found.")
+                    logger.error(f"Error: Google Credentials file not found at {credentials_file}")
+                    return
+
+                # Prevent the script from hanging indefinitely during an unattended automation/cron run
+                is_interactive = os.environ.get("INTERACTIVE_AUTH", "false").lower() == "true"
+                if not is_interactive:
+                    logger.error("\n[ERROR] No valid Google API credentials or active session found.")
+                    logger.error("Please run this script once locally in interactive mode to generate 'token.pickle',")
+                    logger.error(f"then copy 'token.pickle' into your Docker container's directory: {self.CREDENTIALS_DIR}")
+                    logger.error("To force manual link authorization, set the environment variable INTERACTIVE_AUTH=true")
                     return
 
                 flow = InstalledAppFlow.from_client_secrets_file(credentials_file, self.SCOPES)
 
                 try:
-                    # Attempt local server first (works on desktop)
+                    # Attempt local server authentication first
                     creds = flow.run_local_server(port=0)
-                except Exception:
-                    # Fallback for Docker/Headless
-                    print("\n*** ACTION REQUIRED ***")
-                    print("Could not open browser. Please use the following link to authorize the app:")
+                except Exception as server_error:
+                    # OOB Console fxallback (requires manual input)
+                    logger.error("\n*** ACTION REQUIRED ***")
+                    logger.error("Could not open local browser window. Please use this authorization URL:")
                     auth_url, _ = flow.authorization_url(prompt='consent', access_type='offline')
-                    print(f"\n{auth_url}\n")
-                    code = input("Enter the authorization code: ").strip()
-                    flow.fetch_token(code=code)
-                    creds = flow.credentials
+                    logger.error(f"\n{auth_url}\n")
 
-            # Save the credentials for the next run (including the refresh token)
-            with open(pickle_file, 'wb') as token:
-                pickle.dump(creds, token)
-                print("Token saved/refreshed to token.pickle")
+                    try:
+                        # Add an input timeout safety if needed or wait for user input
+                        code = input("Enter the authorization code: ").strip()
+                        flow.fetch_token(code=code)
+                        creds = flow.credentials
+                    except Exception as token_error:
+                        logger.error(f"Error retrieving authentication token: {token_error}")
+                        return
+
+            # Save token for next run to prevent authorization flows in the future
+            if creds:
+                with open(pickle_file, 'wb') as token:
+                    pickle.dump(creds, token)
+                    logger.info(f"Token saved successfully to {pickle_file}")
+
+        if not creds:
+            logger.error("Authentication failed. Aborting calendar synchronization.")
+            return
 
         service = build('calendar', 'v3', credentials=creds)
 
@@ -169,7 +201,7 @@ class WasteCollectionScraper:
                 ).execute()
 
                 if any(event.get('summary') == summary for event in events_result.get('items', [])):
-                    print(f"Skipping duplicate: {iso_start}")
+                    logger.info(f"Skipping duplicate: {iso_start}")
                     continue
 
                 event = {
@@ -180,22 +212,24 @@ class WasteCollectionScraper:
                     'reminders': {'useDefault': False, 'overrides': [{'method': 'email', 'minutes': 24 * 60}]}
                 }
                 service.events().insert(calendarId='primary', body=event).execute()
-                print(f"Synced: {iso_start}")
+                logger.info(f"Synced: {iso_start}")
             except Exception as e:
-                print(f"Error syncing {date_str}: {e}")
+                logger.error(f"Error syncing {date_str}: {e}")
 
 def get_config():
-    config={}
-    config["url"] = os.environ["COLLECTIONS_URL"]
-    config["postcode"] = os.environ["POSTCODE"]
-    config["address"] = os.environ["ADDRESS_SEARCH"]
+    config = {}
+    config["url"] = os.environ.get("COLLECTIONS_URL", "https://webapps.dacorum.gov.uk/bincollections")
+    config["postcode"] = os.environ.get("POSTCODE", "")
+    config["address"] = os.environ.get("ADDRESS_SEARCH", "")
     return config
 
 if __name__ == "__main__":
     CONFIG = get_config()
-    # CONFIG = {"url": "https://webapps.dacorum.gov.uk/bincollections", "pc": "HP4 3TH", "addr": "8 Boswick Lane"}
-    # time.sleep(60)
-    scraper = WasteCollectionScraper(headless=True)
-    data = scraper.find_collection_dates(CONFIG["url"], CONFIG["postcode"], CONFIG["address"])
-    if data:
-        scraper.sync_to_google_calendar(data)
+    logger.info("Starting")
+    if not CONFIG["postcode"] or not CONFIG["address"]:
+        logger.error("Please configure environment variables POSTCODE and ADDRESS_SEARCH.")
+    else:
+        scraper = WasteCollectionScraper(headless=True)
+        data = scraper.find_collection_dates(CONFIG["url"], CONFIG["postcode"], CONFIG["address"])
+        if data:
+            scraper.sync_to_google_calendar(data)

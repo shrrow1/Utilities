@@ -1,7 +1,9 @@
 FROM python:3.12
 
 ARG TARGET_DIR="/usr/src/app"
-ARG CRON_LOG="/var/log/BinCollections.log"
+ARG LOG_DIR="/usr/src/app/logs"
+ARG CRON_LOG="${LOG_DIR}/BinCollections.log"
+ARG LOCAL_DIR="BinNotifications"
 WORKDIR ${TARGET_DIR}
 
 
@@ -12,9 +14,10 @@ RUN apt-get update && apt-get install -y \
     cron \
     && rm -rf /var/lib/apt/lists/*
 
-#COPY GetBinCollections.py requirements.txt token.pickle credentials.json ./
-COPY GetBinCollections.py requirements.txt bincollections.env .env ./
+COPY ${LOCAL_DIR}/GetBinCollections.py ${LOCAL_DIR}/requirements.txt ${LOCAL_DIR}/bincollections.env ${LOCAL_DIR}/.env ./
+COPY shared_logger  ./shared_logger
 
+RUN pip install -e shared_logger
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Set environment variable so Selenium knows where Chrome is if needed

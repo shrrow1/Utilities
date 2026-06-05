@@ -5,7 +5,7 @@ sudo docker compose down && sudo docker compose up --build -d
 ```
 
 # Logging
-Logs to `/var/log/BinCollections.log`
+Logs to `/AppData/BinNotifications/Logs/BinCollections.log`
 
 # Google Cloud Console Setup for Calendar API
 
