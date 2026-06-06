@@ -1,0 +1,27 @@
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: kuma
+    restart: unless-stopped
+    # If you are routing through a reverse proxy on the same custom Docker network,
+    # you can safely comment out or remove the 'ports' section entirely to keep it secure.
+    ports:
+      - "3001:3001"
+    volumes:
+      - /AppData/Kuma/data:/app/data
+      # OPTIONAL: Uncomment the line below ONLY if you also want Kuma to monitor
+      # the active/inactive state of local Docker containers on this specific host.
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - TZ=Europe/London  # Change to your local timezone
+      - UPGRADE_INSECURE_REQUESTS=1
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kuma.rule=Host(`kuma.home`)"
+      - "traefik.http.services.kuma.loadbalancer.server.port=3001"
+    networks:
+      - backend
+networks:
+  backend:
+    name: proxy-network
+    external: true
