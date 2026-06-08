@@ -1,6 +1,6 @@
 services:
   uptime-kuma:
-    image: louislam/uptime-kuma:1
+    image: louislam/uptime-kuma
     container_name: kuma
     restart: unless-stopped
     # If you are routing through a reverse proxy on the same custom Docker network,
@@ -11,7 +11,7 @@ services:
       - /AppData/Kuma/data:/app/data
       # OPTIONAL: Uncomment the line below ONLY if you also want Kuma to monitor
       # the active/inactive state of local Docker containers on this specific host.
-      # - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - TZ=Europe/London  # Change to your local timezone
       - UPGRADE_INSECURE_REQUESTS=1
