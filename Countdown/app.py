@@ -18,14 +18,14 @@ def get_working_days(start_date, end_date):
     current_date = start_date
     while current_date < end_date:
         # Check if weekday (0-4 is Mon-Fri) and not a bank holiday
-        if current_date.weekday() < 5 and current_date.strftime('%Y-%m-%d') not in BANK_HOLIDAYS:
+        if current_date.weekday() < 4 and current_date.strftime('%Y-%m-%d') not in BANK_HOLIDAYS:
             working_days += 1
         current_date += timedelta(days=1)
     return working_days
 
 @app.route('/')
 def index():
-    target_date = datetime(2026, 12, 24)
+    target_date = datetime(2026, 12, 17)
     
     date_override = request.args.get('date')
     if date_override:
@@ -44,9 +44,9 @@ def index():
     
     # Check for 'holidays' override in URL params (default: 44)
     try:
-        holiday_count = int(request.args.get('holidays', 33))
+        holiday_count = int(request.args.get('holidays', 0))
     except (ValueError, TypeError):
-        holiday_count = 44
+        holiday_count = 0
     
     # 3rd Screen Logic: Working days - holiday_count
     holiday_calc = max(0, work_days - holiday_count)
