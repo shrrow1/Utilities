@@ -11,8 +11,11 @@ import piexif
 from PIL import Image, ExifTags
 import requests
 
+EXIF_ORIENTATION_MAP = {3: 180, 6: 90, 8: 270}
+
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
-DEFAULT_OLLAMA_MODEL = "qwen3-vl:2b"
+# DEFAULT_OLLAMA_MODEL = "qwen3-vl:2b"
+DEFAULT_OLLAMA_MODEL = "moondream"
 OLLAMA_THUMBNAIL_SIZE = (512, 512)
 PNG_EXTENSIONS = (".png",)
 JPEG_EXTENSIONS = (".jpg", ".jpeg",)
@@ -56,7 +59,8 @@ class PhotoOrienter:
     def _rotate_jpg(self, file: Path, rotation: int) -> bool:
         try:
             # -rotate <angle> -copy all preserves metadata while rotating structure
-            cmd = ["jpegtran", f"-rotate", str(rotation), "-copy", "all", str(file)]
+            # cmd = ["jpegtran", "-rotate", str(rotation), "-copy", "all", str(file) ]
+            cmd = ["jpegtran", "-rotate", "180", "-copy", "all", str(file) ]
             with open(self.target_directory / file.name, "wb") as f_out:
                 result = subprocess.run(cmd, stdout=f_out, stderr=subprocess.PIPE, text=True)
                 if result.returncode != 0:
@@ -106,16 +110,20 @@ class PhotoOrienter:
                 for tag, value in exif.items():
                     decoded = ExifTags.TAGS.get(tag, tag)
                     if decoded == "Orientation":
-                        self.logger.info(f"{str(file)}: Orientation tag found")
+                        self.logger.info(f"{str(file)}: Orientation tag found: Rotation needed = {self._decode_exif_rotation(value)}")
                         if value == 1:
                             # 1 implies image is already upright
                             return 0
                         elif value in [3, 6, 8]:
                             # Map standard EXIF to degrees
-                            return {3: 180, 6: 90, 8: 270}.get(value, 0)
+                            return self._decode_exif_rotation(value)
                 return None
         except (AttributeError, KeyError):
             self.logger.warning(f"{str(file)}: Error checking EXIF data")
+
+    @staticmethod
+    def _decode_exif_rotation(value):
+        return EXIF_ORIENTATION_MAP.get(value, 0)
 
     @staticmethod
     def _convert_to_base64(img) -> str:
@@ -134,24 +142,53 @@ class PhotoOrienter:
 
             payload = {
                 "model": self.ollama_model,  # or any local vision model loaded in Ollama
+                # "prompt":
+                #     "DO NOT BE CONVERSATIONAL. Analyze this image to determine its orientation. DO NOT modify the image. "
+                #     "Reply ONLY a JSON payload of format {message: <SUCCESS or the error message>, rotation: <integer>}, "
+                #     "with any errors you encountered or with a single integer representing clockwise rotation required to "
+                #     "make it upright; Possible values are : 0, 90, 180, or 270.",
                 "prompt":
-                    "Analyze this image to determine its orientation. DO NOT modify teh image. DO NOT be conversational. "
-                    "Reply ONLY a JSON payload of format {message: <SUCCESS or the error message>, rotation: <integer>}, "
-                    "with any errors you encountered or with a single integer representing clockwise rotation required to "
-                    "make it upright; Possible values are : 0, 90, 180, or 270.",
+                    "Analyze this image orientation. Reply ONLY with a single integer representing clockwise rotation "
+                    "required to make it upright: 0, 90, 180, or 270.",
+                # "prompt":
+                #     "Give a brief description of this image",
                 "images": [img_base64],
                 "stream": False,
+                "think": False,
                 "options": {
-                    "num_predict": 10,
+                    "num_predict": 256,
                     "temperature": 0
                 }
             }
 
+            payload = {
+                "model": self.ollama_model,
+                "prompt": (
+                    "Look at the sky, ground, horizon, water, or objects in this image. "
+                    "Decide if it is upright (0), rotated 90 degrees clockwise, upside down (180), "
+                    "or rotated 270 degrees clockwise to make it upright."
+                ),
+                "images": [img_base64],
+                "stream": False,
+                "think": False,
+                "format": {
+                    "type": "object",
+                    "properties": {
+                        "rotation": {"type": "integer", "enum": [0, 90, 180, 270]}
+                    },
+                    "required": ["rotation"],
+                },
+                "options": {
+                    # "num_predict": 256,
+                    "temperature": 0,
+                },
+            }
             try:
-                response = requests.post(self.ollama_url, json=payload, timeout=10)
+                response = requests.post(self.ollama_url, json=payload)
+                # response = requests.post(self.ollama_url, json=payload, timeout=10)
                 if response.status_code == 200:
                     text = response.json().get("response", "").strip()
-                    self.logger.debug(f"{str(file)}: AI Response {text}")
+                    self.logger.debug(f"{str(file)}: AI Response {text} <")
                     if "SUCCESS" in text and "rotation" in text:
                         try:
                             rotation_value = int(text.split("rotation:")[1].split("}")[0].strip())
@@ -198,7 +235,7 @@ class PhotoOrienter:
                     log_record["status"] = "Changed"
                     log_record["rotated_by"] = "AI"
                     log_record["rotation_angle"] = rotation
-
+        self._ai_get_rotation(file)
         return log_record
 
     def process_files(self) -> list[log_type]:
