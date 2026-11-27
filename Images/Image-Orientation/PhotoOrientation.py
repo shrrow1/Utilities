@@ -30,6 +30,8 @@ class PhotoOrienter:
     def __init__(self, source_directory: Path, target_directory: Path, dry_run: bool,
                  report: Path | None = None, log_level: str = 'INFO',
                  ollama_url: str = DEFAULT_OLLAMA_URL, ollama_model: str | None = DEFAULT_OLLAMA_MODEL) -> None:
+        if source_directory == target_directory:
+            raise ValueError("Source and target directories must be different")
         self.source_directory = source_directory
         self.target_directory = target_directory
         self.dry_run = dry_run
@@ -56,11 +58,15 @@ class PhotoOrienter:
             self.logger.warning(f"{file}: Error rotating PNG: {e}")
             return False
 
+     # def _calc_target_path(self, this_path: Path) -> Path:
+     #    pass
+     #    return self.target_directory / this_path
+
     def _rotate_jpg(self, file: Path, rotation: int) -> bool:
         try:
             # -rotate <angle> -copy all preserves metadata while rotating structure
             # cmd = ["jpegtran", "-rotate", str(rotation), "-copy", "all", str(file) ]
-            cmd = ["jpegtran", "-rotate", "180", "-copy", "all", str(file) ]
+            cmd = ["jpegtran", "-rotate", "180", "-copy", "all", str(file)]
             with open(self.target_directory / file.name, "wb") as f_out:
                 result = subprocess.run(cmd, stdout=f_out, stderr=subprocess.PIPE, text=True)
                 if result.returncode != 0:
@@ -110,7 +116,8 @@ class PhotoOrienter:
                 for tag, value in exif.items():
                     decoded = ExifTags.TAGS.get(tag, tag)
                     if decoded == "Orientation":
-                        self.logger.info(f"{str(file)}: Orientation tag found: Rotation needed = {self._decode_exif_rotation(value)}")
+                        self.logger.info(
+                            f"{str(file)}: Orientation tag found: Rotation needed = {self._decode_exif_rotation(value)}")
                         if value == 1:
                             # 1 implies image is already upright
                             return 0
@@ -270,6 +277,7 @@ def get_args() -> argparse.Namespace:
         help="Ollama vision model to use for orientation detection",
     )
     return parser.parse_args()
+
 
 
 if __name__ == "__main__":
