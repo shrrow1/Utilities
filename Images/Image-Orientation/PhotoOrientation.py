@@ -66,8 +66,8 @@ class PhotoOrienter:
     def _rotate_jpg(self, file: Path, out_file:Path, rotation: int) -> bool:
         try:
             # -rotate <angle> -copy all preserves metadata while rotating structure
-            # cmd = ["jpegtran", "-rotate", str(rotation), "-copy", "all", str(file) ]
-            cmd = ["jpegtran", "-rotate", "180", "-copy", "all", str(file)]
+            cmd = ["jpegtran", "-rotate", str(rotation), "-copy", "all", str(file)]
+            # cmd = ["jpegtran", "-rotate", "180", "-copy", "all", str(file)]
             with open(out_file, "wb") as f_out:
                 result = subprocess.run(cmd, stdout=f_out, stderr=subprocess.PIPE, text=True)
                 if result.returncode != 0:
@@ -79,7 +79,7 @@ class PhotoOrienter:
             if "0th" in exif_dict and piexif.ImageIFD.Orientation in exif_dict["0th"]:
                 exif_dict["0th"][piexif.ImageIFD.Orientation] = 1
                 exif_bytes = piexif.dump(exif_dict)
-                piexif.insert(exif_bytes, str(self.target_directory / file.name))
+                piexif.insert(exif_bytes, str(out_file))
                 self.logger.debug(f"{str(file)}: Exif updated: {exif_dict}")
             return True
         except (FileNotFoundError, OSError) as e:
@@ -126,7 +126,7 @@ class PhotoOrienter:
                     decoded = ExifTags.TAGS.get(tag, tag)
                     if decoded == "Orientation":
                         self.logger.info(
-                            f"{str(file)}: Orientation tag found: Rotation needed = {self._decode_exif_rotation(value)}")
+                            f"{str(file)}: Orientation tag found: EXIT rotation` = {self._decode_exif_rotation(value)}")
                         if value == 1:
                             # 1 implies image is already upright
                             return 0
