@@ -10,6 +10,7 @@ from io import BytesIO
 import piexif
 from PIL import Image, ExifTags
 import requests
+from SharedLogger import CustomLogger
 
 EXIF_ORIENTATION_MAP = {3: 180, 6: 90, 8: 270}
 
@@ -36,38 +37,38 @@ class PhotoOrienter:
         self.target_directory = target_directory
         self.dry_run = dry_run
         self.report = report
-        self.log_level = log_level
-        self.logger = logging.getLogger("PhotoOrientation")
+        # self.log_level = log_level
+        # self.logger = logging.getLogger("PhotoOrientation")
+        self.logger = CustomLogger.CustomLogger("PhotoOrientation", log_level)
         self.ollama_url = ollama_url
         self.ollama_model = ollama_model
         self.processing_report: list[log_type] = []
 
-        self._setup_logging(self.log_level)
+        # self._setup_logging(self.log_level)
 
-    def _rotate_png(self, file: Path, rotation: int) -> bool:
+    def _rotate_png(self, file: Path, out_file: Path, rotation: int) -> bool:
         try:
             with Image.open(file) as orig_img:
                 new_image = orig_img.rotate(-rotation, expand=True)
                 exif = orig_img.getexif()
                 exif[EXIF_ORIENTATION_TAG] = 1
-                new_file = self.target_directory / file.name
-                new_image.save(new_file, exif=exif, format="PNG")
+                new_image.save(out_file, exif=exif, format="PNG")
                 self.logger.debug(f"{str(file)}: Updated and exif updated: {exif}")
                 return True
         except (FileNotFoundError, OSError) as e:
             self.logger.warning(f"{file}: Error rotating PNG: {e}")
             return False
 
-     # def _calc_target_path(self, this_path: Path) -> Path:
-     #    pass
-     #    return self.target_directory / this_path
+    def _calc_target_path(self, this_path: Path) -> Path:
+        target_path = self.target_directory / this_path.relative_to(self.source_directory)
+        return target_path
 
-    def _rotate_jpg(self, file: Path, rotation: int) -> bool:
+    def _rotate_jpg(self, file: Path, out_file:Path, rotation: int) -> bool:
         try:
             # -rotate <angle> -copy all preserves metadata while rotating structure
             # cmd = ["jpegtran", "-rotate", str(rotation), "-copy", "all", str(file) ]
             cmd = ["jpegtran", "-rotate", "180", "-copy", "all", str(file)]
-            with open(self.target_directory / file.name, "wb") as f_out:
+            with open(out_file, "wb") as f_out:
                 result = subprocess.run(cmd, stdout=f_out, stderr=subprocess.PIPE, text=True)
                 if result.returncode != 0:
                     self.logger.warning(f"{str(file)}: Failed to rotate jpg file: {result.stderr}")
@@ -85,15 +86,23 @@ class PhotoOrienter:
             self.logger.warning(f"{str(file)}: Error rotating jpg file: {e}")
             return False
 
-    def _rotate_file(self, file: Path, rotation: int) -> bool:
-        self.logger.debug(f" {str(file)}: Rotating file")
-        suffix = file.suffix.lower()
+    @staticmethod
+    def _check_create_output_dir(target_file: Path) -> None:
+        new_dir = target_file.parent
+        if not new_dir.exists():
+            new_dir.mkdir(parents=True)
+
+    def _rotate_file(self, source_image: Path, rotation: int) -> bool:
+        self.logger.debug(f" {str(source_image)}: Rotating file")
+        suffix = source_image.suffix.lower()
+        target_image = self._calc_target_path(source_image)
+        self._check_create_output_dir(target_image)
         if suffix in JPEG_EXTENSIONS:
-            return self._rotate_jpg(file, rotation)
+            return self._rotate_jpg(source_image, target_image, rotation)
         if suffix in PNG_EXTENSIONS:
-            return self._rotate_png(file, rotation)
+            return self._rotate_png(source_image, target_image, rotation)
         else:
-            self.logger.warning(f"Unsupported file type: {file.suffix}")
+            self.logger.warning(f"Unsupported file type: {source_image.suffix}")
             return False
 
     def _setup_logging(self, log_level: str) -> None:
@@ -242,19 +251,19 @@ class PhotoOrienter:
                     log_record["status"] = "Changed"
                     log_record["rotated_by"] = "AI"
                     log_record["rotation_angle"] = rotation
-        self._ai_get_rotation(file)
+        # self._ai_get_rotation(file)
         return log_record
 
     def process_files(self) -> list[log_type]:
 
-        for file in Path.glob(self.source_directory, "*"):
+        for file in Path.glob(self.source_directory, "**/*"):
             if os.path.isfile(file) \
                     and os.path.splitext(file)[1].lower() in PHOTO_EXTENSIONS:
                 self.logger.debug("Processing file: %s", file)
                 file_report = self._process_file(file)
                 self.processing_report.append(file_report)
             else:
-                self.logger.debug("Ignoring file: %s", file)
+                self.logger.debug(f"{file}: Ignoring file:")
 
         return self.processing_report
 
