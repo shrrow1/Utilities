@@ -2,5 +2,5 @@
 
 ```shell
 cd Utilities
-pip install -e shared-logger
+pip install -e SharedLogger
 ```
