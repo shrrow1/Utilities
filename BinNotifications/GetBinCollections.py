@@ -17,7 +17,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait, Select
 
-from shared_logger import CustomLogger
+from SharedLogger import CustomLogger
 
 logger = CustomLogger.CustomLogger(
     name=__name__,
