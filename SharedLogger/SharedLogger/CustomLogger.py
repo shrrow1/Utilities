@@ -47,7 +47,7 @@ class CustomLogger:
             self.logger.handlers.clear()
 
         # Define a standard format
-        log_format = "[%(asctime)s] [%(levelname)s] [%(name)s] - %(message)s"
+        log_format = "[%(asctime)s] [%(name)s] [%(levelname)s] - %(message)s"
         date_format = "%Y-%m-%d %H:%M:%S"
 
         # 1. Console Handler (Standard Formatting)
