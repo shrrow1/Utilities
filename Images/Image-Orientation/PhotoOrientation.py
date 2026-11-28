@@ -15,6 +15,7 @@ from SharedLogger import CustomLogger
 EXIF_ORIENTATION_MAP = {3: 180, 6: 90, 8: 270}
 
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
+DEFAULT_OLLAMA_URL = "http://mortirolo.home:11434/api/generate"
 # DEFAULT_OLLAMA_MODEL = "qwen3-vl:2b"
 DEFAULT_OLLAMA_MODEL = "moondream"
 OLLAMA_THUMBNAIL_SIZE = (512, 512)
@@ -39,7 +40,7 @@ class PhotoOrienter:
         self.report = report
         # self.log_level = log_level
         # self.logger = logging.getLogger("PhotoOrientation")
-        self.logger = CustomLogger.CustomLogger("PhotoOrientation", log_level)
+        self.logger = CustomLogger.CustomLogger("PhotoOrientation", level=log_level)
         self.ollama_url = ollama_url
         self.ollama_model = ollama_model
         self.processing_report: list[log_type] = []
@@ -126,7 +127,7 @@ class PhotoOrienter:
                     decoded = ExifTags.TAGS.get(tag, tag)
                     if decoded == "Orientation":
                         self.logger.info(
-                            f"{str(file)}: Orientation tag found: EXIT rotation` = {self._decode_exif_rotation(value)}")
+                            f"{str(file)}: Orientation tag found: EXIF rotation` = {self._decode_exif_rotation(value)}")
                         if value == 1:
                             # 1 implies image is already upright
                             return 0
@@ -151,7 +152,7 @@ class PhotoOrienter:
         return img_str
 
     def _ai_get_rotation(self, file: Path) -> int | None:
-
+        self.logger.debug(f"{str(file)}: Calling AI for orientation detection")
         with Image.open(file) as img:
 
             img_base64 = self._convert_to_base64(img)
@@ -202,6 +203,7 @@ class PhotoOrienter:
             try:
                 response = requests.post(self.ollama_url, json=payload)
                 # response = requests.post(self.ollama_url, json=payload, timeout=10)
+                self.logger.debug(f"{str(file)}: AI call response status {response}")
                 if response.status_code == 200:
                     text = response.json().get("response", "").strip()
                     self.logger.debug(f"{str(file)}: AI Response {text} <")
@@ -237,6 +239,7 @@ class PhotoOrienter:
             if self.dry_run:
                 self.logger.debug(f"{str(file)}: Dry run, got exif but skipping")
             elif rotation != 0:
+                # TODO define rotation i.e given EXIG which way do we rotate
                 if self._rotate_file(file, rotation):
                     log_record["status"] = "Changed"
                     log_record["rotated_by"] = "EXIF"
@@ -247,11 +250,12 @@ class PhotoOrienter:
             else:
                 self.logger.debug(f"{str(file)}: No EXIF so passing to AI")
                 rotation = self._ai_get_rotation(file)
+                # TODO define rotation
                 if rotation and self._rotate_file(file, rotation):
                     log_record["status"] = "Changed"
                     log_record["rotated_by"] = "AI"
                     log_record["rotation_angle"] = rotation
-        # self._ai_get_rotation(file)
+        x=self._ai_get_rotation(file)
         return log_record
 
     def process_files(self) -> list[log_type]:
@@ -301,4 +305,10 @@ if __name__ == "__main__":
         cli_args.model,
     )
     report = processor.process_files()
-    pass
+
+    if cli_args.report:
+        with open(cli_args.report, "w") as f:
+            for record in report:
+                f.write(f"{record}\n")
+
+
